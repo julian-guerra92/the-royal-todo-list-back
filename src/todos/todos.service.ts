@@ -11,6 +11,7 @@ import { CreateTodoDto } from './dto/create-todo.dto';
 import { UpdateTodoDto } from './dto/update-todo.dto';
 import { validateInauspiciousDate } from '../utils/validateInauspiciousDate';
 import { validateNigeriaHoliday } from 'src/utils/validateNigeriaHolidays';
+import { isCursedTitle } from '../utils/palindromeValidator';
 
 @Injectable()
 export class TodosService extends PrismaClient {
@@ -38,6 +39,7 @@ export class TodosService extends PrismaClient {
 
       this.logger.log(`Todo created successfully with ID: ${todo.id}`);
       return todo;
+
     } catch (error) {
       this.handleException(error, 'creating');
     }
@@ -46,11 +48,16 @@ export class TodosService extends PrismaClient {
   async findAll() {
     try {
       const todos = await this.todo.findMany({
+        where: {
+          // Excluir notas malditas que aún no han sido eliminadas
+          cursed: false,
+        },
         orderBy: [{ scheduledDate: 'asc' }, { priority: 'desc' }],
       });
 
       this.logger.log(`Found ${todos.length} todos`);
       return todos;
+
     } catch (error) {
       this.handleException(error, 'fetching');
     }
@@ -68,6 +75,7 @@ export class TodosService extends PrismaClient {
 
       this.logger.log(`Todo with ID ${id} found`);
       return todo;
+
     } catch (error) {
       this.handleException(error, 'finding', id);
     }
@@ -76,20 +84,27 @@ export class TodosService extends PrismaClient {
   async update(id: number, updateTodoDto: UpdateTodoDto) {
     try {
       await this.findOne(id);
-
-      const { scheduledDate } = updateTodoDto;
+      const { scheduledDate, title } = updateTodoDto;
 
       if (scheduledDate) {
         this.validateScheduledDate(scheduledDate);
       }
 
+      const titleToCheck = title || '';
+      const isTitleCursed = isCursedTitle(titleToCheck);
+
       const updatedTodo = await this.todo.update({
         where: { id },
-        data: updateTodoDto,
+        data: {
+          ...updateTodoDto,
+          cursed: isTitleCursed,
+          deleteAt: isTitleCursed ? new Date(Date.now() + 10 * 1000) : null,
+        },
       });
 
       this.logger.log(`Todo with ID ${id} updated successfully`);
       return updatedTodo;
+
     } catch (error) {
       this.handleException(error, 'updating', id);
     }
@@ -107,6 +122,57 @@ export class TodosService extends PrismaClient {
       return deletedTodo;
     } catch (error) {
       this.handleException(error, 'deleting', id);
+    }
+  }
+
+  async removeAll() {
+    try {
+      const deleteResult = await this.todo.deleteMany({});
+      this.logger.warn(`All todos deleted, count: ${deleteResult.count}`);
+      return deleteResult;
+    } catch (error) {
+      this.handleException(error, 'deleting all todos');
+    }
+  }
+
+  async cleanCursedTodos() {
+    try {
+      const now = new Date();
+
+      const cursedTodos = await this.todo.findMany({
+        where: {
+          cursed: true,
+          deleteAt: {
+            lte: now,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (cursedTodos.length === 0) {
+        this.logger.log('No cursed todos to clean');
+        return;
+      }
+
+      const deleteResult = await this.todo.deleteMany({
+        where: {
+          cursed: true,
+          deleteAt: {
+            lte: now,
+          },
+        },
+      });
+
+      if (deleteResult.count > 0) {
+        this.logger.warn(
+          `🔮 Palindrome Curse executed: Eliminated ${deleteResult.count} cursed todo(s)`,
+        );
+        return deleteResult.count;
+      }
+    } catch (error) {
+      this.handleException(error, 'cleaning cursed todos');
     }
   }
 
