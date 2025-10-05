@@ -8,15 +8,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Todo {
+model ToDo {
   id            Int       @id @default(autoincrement())
   title         String    @db.VarChar(100)
   content       String    @db.VarChar(500)
   scheduledDate DateTime  @map("scheduled_date") @db.Date
   priority      Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at")
-  
-  // Campos para la Maldición del Palíndromo
   cursed        Boolean   @default(false)
   deleteAt      DateTime? @map("delete_at")
+
+  @@index([cursed, scheduledDate, priority], name: "idx_cursed_scheduled_priority")
+  @@index([cursed, deleteAt], name: "idx_cursed_delete_cleanup")
+  @@index([scheduledDate, priority], name: "idx_scheduled_priority_order")
+  @@index([createdAt], name: "idx_created_at")
+	@@map("to_do")
 }

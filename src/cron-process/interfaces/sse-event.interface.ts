@@ -1,5 +1,7 @@
+import { ActionsSseEvent } from "../enum/actions-sse-event.enum";
+
 export interface SseEvent {
-  action: string;
+  action: ActionsSseEvent;
   timestamp?: string;
   message?: string;
 }

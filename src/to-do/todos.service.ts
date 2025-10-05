@@ -10,7 +10,7 @@ import { Prisma } from 'generated/prisma';
 import { CreateTodoDto } from './dto/create-todo.dto';
 import { UpdateTodoDto } from './dto/update-todo.dto';
 import { validateInauspiciousDate } from '../utils/validateInauspiciousDate';
-import { validateNigeriaHoliday } from 'src/utils/validateNigeriaHolidays';
+import { validateNigeriaHoliday } from '../utils/validateNigeriaHolidays';
 import { isCursedTitle } from '../utils/palindromeValidator';
 
 @Injectable()
@@ -28,7 +28,7 @@ export class TodosService extends PrismaClient {
 
       this.validateScheduledDate(scheduledDate);
 
-      const todo = await this.todo.create({
+      const todo = await this.toDo.create({
         data: {
           title: title.trim(),
           content: content.trim(),
@@ -47,9 +47,8 @@ export class TodosService extends PrismaClient {
 
   async findAll() {
     try {
-      const todos = await this.todo.findMany({
+      const todos = await this.toDo.findMany({
         where: {
-          // Excluir notas malditas que aún no han sido eliminadas
           cursed: false,
         },
         orderBy: [{ scheduledDate: 'asc' }, { priority: 'desc' }],
@@ -64,21 +63,10 @@ export class TodosService extends PrismaClient {
   }
 
   async findOne(id: number) {
-    try {
-      const todo = await this.todo.findUnique({
-        where: { id },
-      });
-
-      if (!todo) {
-        throw new NotFoundException(`Todo with ID ${id} not found`);
-      }
-
-      this.logger.log(`Todo with ID ${id} found`);
-      return todo;
-
-    } catch (error) {
-      this.handleException(error, 'finding', id);
-    }
+    const todo = await this.toDo.findUnique({
+      where: { id },
+    });
+    return todo;
   }
 
   async update(id: number, updateTodoDto: UpdateTodoDto) {
@@ -93,7 +81,7 @@ export class TodosService extends PrismaClient {
       const titleToCheck = title || '';
       const isTitleCursed = isCursedTitle(titleToCheck);
 
-      const updatedTodo = await this.todo.update({
+      const updatedTodo = await this.toDo.update({
         where: { id },
         data: {
           ...updateTodoDto,
@@ -114,7 +102,7 @@ export class TodosService extends PrismaClient {
     try {
       await this.findOne(id);
 
-      const deletedTodo = await this.todo.delete({
+      const deletedTodo = await this.toDo.delete({
         where: { id },
       });
 
@@ -125,13 +113,30 @@ export class TodosService extends PrismaClient {
     }
   }
 
-  async removeAll() {
+  async removeAll(refreshIndexes: boolean = false) {
     try {
-      const deleteResult = await this.todo.deleteMany({});
-      this.logger.warn(`All todos deleted, count: ${deleteResult.count}`);
-      return deleteResult;
+      const deleteResult = await this.toDo.deleteMany({});
+
+      if (refreshIndexes) {
+        await this.refreshDatabaseIndexes();
+        this.logger.warn(`All todos deleted, count: ${deleteResult.count}. Indexes refreshed for prime minute.`);
+      } else {
+        this.logger.warn(`All todos deleted, count: ${deleteResult.count}`);
+      }
+
+      return { ...deleteResult, indexesRefreshed: refreshIndexes };
     } catch (error) {
       this.handleException(error, 'deleting all todos');
+    }
+  }
+
+  async refreshDatabaseIndexes() {
+    try {
+      await this.$executeRaw`ANALYZE TABLE ToDo`;
+      await this.$executeRaw`OPTIMIZE TABLE ToDo`;
+      this.logger.log('✨ Database indexes refreshed successfully');
+    } catch (error) {
+      this.logger.error('Error refreshing database indexes', error.stack);
     }
   }
 
@@ -139,7 +144,7 @@ export class TodosService extends PrismaClient {
     try {
       const now = new Date();
 
-      const cursedTodos = await this.todo.findMany({
+      const cursedTodos = await this.toDo.findMany({
         where: {
           cursed: true,
           deleteAt: {
@@ -156,7 +161,7 @@ export class TodosService extends PrismaClient {
         return;
       }
 
-      const deleteResult = await this.todo.deleteMany({
+      const deleteResult = await this.toDo.deleteMany({
         where: {
           cursed: true,
           deleteAt: {
@@ -167,7 +172,7 @@ export class TodosService extends PrismaClient {
 
       if (deleteResult.count > 0) {
         this.logger.warn(
-          `🔮 Palindrome Curse executed: Eliminated ${deleteResult.count} cursed todo(s)`,
+          `Palindrome Curse executed: Eliminated ${deleteResult.count} cursed todo(s)`,
         );
         return deleteResult.count;
       }

@@ -19,4 +19,15 @@ export class CronProcessController {
       })
     );
   }
+
+  @Sse('great-reset')
+  greatResetEvents(): Observable<{ data: string }> {
+    return this.sseService.getGreatResetStream().pipe(
+      map((event: SseEvent) => {
+        return {
+          data: JSON.stringify(event)
+        };
+      })
+    );
+  }
 }
