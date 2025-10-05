@@ -14,7 +14,7 @@ export class CronProcessService {
     private readonly sseService: SseService
   ) { }
 
-  @Cron(CronExpression.EVERY_10_SECONDS, {
+  @Cron(CronExpression.EVERY_5_SECONDS, {
     name: 'cleanCursedTodos',
     timeZone: 'America/Bogota',
   })

@@ -48,9 +48,6 @@ export class TodosService extends PrismaClient {
   async findAll() {
     try {
       const todos = await this.toDo.findMany({
-        where: {
-          cursed: false,
-        },
         orderBy: [{ scheduledDate: 'asc' }, { priority: 'desc' }],
       });
 
