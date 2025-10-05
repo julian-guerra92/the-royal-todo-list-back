@@ -1,0 +1,18 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Todo {
+  id            Int      @id @default(autoincrement())
+  title         String   @db.VarChar(100)
+  content       String   @db.VarChar(500)
+  scheduledDate DateTime @map("scheduled_date") @db.Date
+  priority      Int      @default(1)
+  createdAt     DateTime @default(now()) @map("created_at")
+}
